@@ -1,15 +1,34 @@
 const net = require('net')
 const path = require('path')
+const os = require('os')
 const { spawn } = require('child_process')
 const fs = require('fs')
 
-const WALKIE_DIR = process.env.WALKIE_DIR || path.join(process.env.HOME, '.walkie')
-const SOCKET_PATH = path.join(WALKIE_DIR, 'daemon.sock')
+const IS_WINDOWS = process.platform === 'win32'
+const WALKIE_DIR = process.env.WALKIE_DIR || path.join(os.homedir(), '.walkie')
+const SOCKET_PATH = path.join(WALKIE_DIR, 'daemon.sock')  // Unix only
+const PORT_FILE = path.join(WALKIE_DIR, 'daemon.port')    // Windows only
 const PID_FILE = path.join(WALKIE_DIR, 'daemon.pid')
+
+function getAddress() {
+  if (IS_WINDOWS) {
+    try {
+      const port = parseInt(fs.readFileSync(PORT_FILE, 'utf8').trim(), 10)
+      return { host: '127.0.0.1', port }
+    } catch {
+      return null
+    }
+  }
+  return SOCKET_PATH
+}
 
 function connect() {
   return new Promise((resolve, reject) => {
-    const sock = net.connect(SOCKET_PATH)
+    const addr = getAddress()
+    if (addr === null) return reject(new Error('Daemon not running'))
+    const sock = IS_WINDOWS
+      ? net.connect(addr.port, addr.host)
+      : net.connect(addr)
     sock.on('connect', () => resolve(sock))
     sock.on('error', reject)
   })
@@ -57,8 +76,8 @@ async function ensureDaemon() {
     if (resp.ok) return
   } catch {}
 
-  // Clean stale socket and PID file before spawning
-  try { fs.unlinkSync(SOCKET_PATH) } catch {}
+  // Clean stale socket/port file and PID file before spawning
+  try { fs.unlinkSync(IS_WINDOWS ? PORT_FILE : SOCKET_PATH) } catch {}
   try {
     const pid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10)
     if (!isProcessRunning(pid)) fs.unlinkSync(PID_FILE)
@@ -85,7 +104,7 @@ async function ensureDaemon() {
     } catch {}
   }
 
-  throw new Error('Failed to start walkie daemon. Check ~/.walkie/daemon.log for details')
+  throw new Error(`Failed to start walkie daemon. Check ${path.join(WALKIE_DIR, 'daemon.log')} for details`)
 }
 
 async function request(cmd, timeout) {

@@ -2,11 +2,14 @@ const Hyperswarm = require('hyperswarm')
 const net = require('net')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 const { deriveTopic, agentId } = require('./crypto')
 const store = require('./store')
 
-const WALKIE_DIR = process.env.WALKIE_DIR || path.join(process.env.HOME, '.walkie')
+const IS_WINDOWS = process.platform === 'win32'
+const WALKIE_DIR = process.env.WALKIE_DIR || path.join(os.homedir(), '.walkie')
 const SOCKET_PATH = path.join(WALKIE_DIR, 'daemon.sock')
+const PORT_FILE = path.join(WALKIE_DIR, 'daemon.port')
 const PID_FILE = path.join(WALKIE_DIR, 'daemon.pid')
 const LOG_FILE = path.join(WALKIE_DIR, 'daemon.log')
 
@@ -32,12 +35,23 @@ class WalkieDaemon {
     fs.mkdirSync(WALKIE_DIR, { recursive: true })
     fs.writeFileSync(PID_FILE, process.pid.toString())
 
-    // Clean stale socket
-    try { fs.unlinkSync(SOCKET_PATH) } catch {}
+    // Clean stale socket/port file
+    try { fs.unlinkSync(IS_WINDOWS ? PORT_FILE : SOCKET_PATH) } catch {}
 
     // IPC server for CLI commands
     const server = net.createServer(sock => this._onIPC(sock))
-    server.listen(SOCKET_PATH)
+
+    if (IS_WINDOWS) {
+      // Windows: listen on random TCP loopback port
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+      const port = server.address().port
+      fs.writeFileSync(PORT_FILE, String(port))
+      log(`Daemon listening on TCP 127.0.0.1:${port}`)
+    } else {
+      // Unix: listen on domain socket
+      await new Promise(resolve => server.listen(SOCKET_PATH, resolve))
+      log(`Daemon listening on ${SOCKET_PATH}`)
+    }
 
     // P2P connections
     this.swarm.on('connection', (conn, info) => this._onPeer(conn, info))
@@ -466,7 +480,7 @@ class WalkieDaemon {
 
   async shutdown() {
     if (this._compactTimer) clearInterval(this._compactTimer)
-    try { fs.unlinkSync(SOCKET_PATH) } catch {}
+    try { fs.unlinkSync(IS_WINDOWS ? PORT_FILE : SOCKET_PATH) } catch {}
     try { fs.unlinkSync(PID_FILE) } catch {}
     await this.swarm.destroy()
     process.exit(0)
