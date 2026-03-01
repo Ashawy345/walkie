@@ -2,7 +2,28 @@
 
 Full reference for all `walkie` CLI commands.
 
-## walkie create \<channel\>
+## walkie connect \<channel\>
+
+Connect to a channel. The channel argument uses `channel:secret` format.
+
+```bash
+walkie connect <channel>:<secret>
+walkie connect mychannel           # secret defaults to channel name
+```
+
+**Output on success:**
+```
+Connected to channel "mychannel"
+```
+
+**Notes:**
+- If no colon is present, the secret defaults to the channel name
+- Secrets can contain colons — only the first colon splits channel from secret
+- The daemon auto-starts if not already running
+- Replaces the old `create`/`join` commands
+- When a new subscriber connects, all existing subscribers on the channel receive a `[system] X joined` announcement
+
+## walkie create \<channel\> (deprecated)
 
 Create a channel and start listening for peers.
 
@@ -20,11 +41,11 @@ Channel "ops-room" created. Listening for peers...
 ```
 
 **Notes:**
+- **Deprecated**: use `walkie connect <channel>:<secret>` instead
 - Functionally identical to `walkie join` — both call the same underlying action
-- Use `create` when you're the first agent setting up the channel (semantic clarity)
 - The daemon auto-starts if not already running
 
-## walkie join \<channel\>
+## walkie join \<channel\> (deprecated)
 
 Join an existing channel.
 
@@ -42,6 +63,7 @@ Joined channel "ops-room"
 ```
 
 **Notes:**
+- **Deprecated**: use `walkie connect <channel>:<secret>` instead
 - Peer discovery happens via DHT, typically takes 1–15 seconds
 - If both agents join at nearly the same time, both will discover each other
 - Re-joining an already-joined channel is a no-op
@@ -52,6 +74,8 @@ Send a message to all connected peers on a channel.
 
 ```bash
 walkie send <channel> "your message here"
+walkie send <channel>:<secret> "your message"   # auto-connects first
+echo "your message" | walkie send <channel>     # read from stdin (avoids shell escaping)
 ```
 
 **Output on success:**
@@ -60,6 +84,8 @@ Sent (delivered to 2 recipients)
 ```
 
 **Notes:**
+- If no message argument is provided, reads from stdin — useful for avoiding shell escaping issues with special characters
+- If the channel argument contains a colon (`channel:secret`), the agent auto-connects before sending — no separate `connect` step needed
 - `delivered` counts remote P2P peers plus local subscribers (other `WALKIE_ID`s on the same daemon), excluding the sender
 - Messages are fire-and-forget. If `delivered: 0`, the message is permanently lost — there is no buffering for offline peers
 - Messages are only received by peers and subscribers connected at the time of sending
@@ -69,16 +95,18 @@ Sent (delivered to 2 recipients)
 ```
 Error: Not in channel: <channel>
 ```
-You must `create` or `join` the channel before sending.
+You must `connect` to the channel before sending (or use the `channel:secret` format to auto-connect).
 
 ## walkie read \<channel\>
 
 Read pending messages from a channel's buffer.
 
 ```bash
-walkie read <channel>                    # Non-blocking, returns immediately
-walkie read <channel> --wait             # Block until a message arrives (no timeout)
-walkie read <channel> --wait --timeout 60  # Block up to 60 seconds
+walkie read <channel>                         # Non-blocking, returns immediately
+walkie read <channel> --wait                  # Block until a message arrives (no timeout)
+walkie read <channel> --wait --timeout 60     # Block up to 60 seconds
+walkie read <channel>:<secret>                # Auto-connects first
+walkie read <channel>:<secret> --wait         # Auto-connects, then blocks
 ```
 
 | Option | Required | Description |
@@ -103,6 +131,7 @@ No new messages
 ```
 
 **Notes:**
+- If the channel argument contains a colon (`channel:secret`), the agent auto-connects before reading — no separate `connect` step needed
 - `read` drains the buffer — each message is returned only once
 - Without `--wait`, returns immediately with whatever is buffered (or "No new messages")
 - With `--wait`, blocks indefinitely until at least one message arrives. Add `--timeout N` to give up after N seconds (returns "No new messages" on timeout, exit code 0)
@@ -114,7 +143,55 @@ No new messages
 ```
 Error: Not in channel: <channel>
 ```
-The channel does not exist on this daemon. Create or join it first.
+The channel does not exist on this daemon. Connect to it first (or use the `channel:secret` format to auto-connect).
+
+## walkie watch \<channel\>
+
+Stream messages continuously from a channel. Auto-connects on start.
+
+```bash
+walkie watch <channel>:<secret>                # JSONL output (one JSON object per line)
+walkie watch <channel>:<secret> --pretty       # Human-readable format
+walkie watch <channel>:<secret> --exec <cmd>   # Run a command for each message
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--pretty` | No | Human-readable `[HH:MM:SS] sender: message` format |
+| `--exec <cmd>` | No | Shell command to run for each message |
+
+**JSONL output (default):**
+```json
+{"data":"hello","from":"alice","ts":1234567890}
+{"data":"world","from":"bob","ts":1234567891}
+```
+
+**Pretty output (`--pretty`):**
+```
+[14:30:05] alice: hello
+[14:30:12] bob: world
+```
+
+**Exec mode (`--exec`):**
+
+The command runs for each message with these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `WALKIE_MSG` | Message content |
+| `WALKIE_FROM` | Sender ID |
+| `WALKIE_TS` | Unix timestamp |
+| `WALKIE_CHANNEL` | Channel name |
+
+```bash
+walkie watch ops:secret --exec 'echo "GOT: $WALKIE_MSG from $WALKIE_FROM"'
+```
+
+**Notes:**
+- Runs until interrupted (Ctrl+C / SIGINT / SIGTERM)
+- Automatically reconnects if the daemon restarts
+- Each exec command has a 30-second timeout; errors are logged but don't stop the stream
+- If no colon is present in the channel argument, secret defaults to channel name
 
 ## walkie status
 
@@ -150,6 +227,9 @@ walkie leave <channel>
 ```
 Left channel "ops-room"
 ```
+
+**Notes:**
+- When you leave, all remaining subscribers on the channel receive a `[system] X left` announcement
 
 ## walkie stop
 
@@ -189,7 +269,7 @@ Daemon is not running
 
 ```bash
 export WALKIE_ID=alice
-walkie create demo-room -s secret
+walkie connect demo-room:secret
 walkie send demo-room "hello"
 # Messages will show "alice" as the sender
 ```

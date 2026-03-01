@@ -59,7 +59,7 @@ This produces a 32-byte topic buffer used by Hyperswarm for peer discovery. Both
 
 ## Peer Connection Flow
 
-1. Agent calls `walkie create room -s secret` or `walkie join room -s secret`
+1. Agent calls `walkie connect room:secret` (or the deprecated `walkie create room -s secret` / `walkie join room -s secret`)
 2. Daemon derives the 32-byte topic from name + secret
 3. Daemon calls `swarm.join(topic, { server: true, client: true })`
 4. Hyperswarm announces on the DHT and looks up other peers on the same topic
@@ -80,6 +80,16 @@ This maps the raw connection to specific channels. A single P2P connection can c
 ### Re-Announcement
 
 When a new channel is joined after peers are already connected, the daemon re-sends its hello message to all existing peers. This handles the race condition where a peer connects before a channel is registered.
+
+## Join Announcements
+
+When a new subscriber connects to a channel, the daemon delivers a system message to all existing subscribers:
+
+```json
+{ "from": "system", "data": "alice joined", "ts": 1234567890 }
+```
+
+This is local-only (not broadcast over P2P) and only triggers for new subscribers — re-joining an already-joined channel is a no-op.
 
 ## Message Flow
 
@@ -118,6 +128,33 @@ When `walkie read --wait` is called and no messages are buffered:
 1. A waiter callback is registered on the subscriber's buffer (per `clientId`)
 2. When a message arrives (P2P or local), `_deliverLocal()` delivers directly to the waiter instead of buffering
 3. If timeout elapses, the waiter returns an empty array
+
+## Watch (Streaming) Mode
+
+The `walkie watch` command provides continuous message streaming without requiring daemon changes. It runs entirely client-side using the same `read --wait` pattern as the web UI.
+
+### How It Works
+
+```
+CLI (walkie watch)          Daemon
+┌──────────────┐       ┌──────────────┐
+│ streamMessages│──────►│ read + wait  │
+│   loop       │       │   (blocks)   │
+│              │◄──────│   response   │
+│  onMessage() │       │              │
+│  (print/exec)│       │              │
+│              │──────►│ read + wait  │
+│   ...repeat  │       │   ...        │
+└──────────────┘       └──────────────┘
+```
+
+1. Client connects to daemon socket, sends `read` with `wait: true` and `timeout: 0`
+2. Daemon blocks until a message arrives, then responds
+3. Client processes the message (print JSONL, pretty-print, or exec a command)
+4. Client destroys the socket and immediately reconnects for the next message
+5. On error (daemon crash), waits 2 seconds, calls `ensureDaemon()`, re-joins, and retries
+
+This is the exact same loop used by `src/web.js` for real-time WebSocket delivery.
 
 ## IPC Protocol
 

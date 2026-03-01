@@ -21,13 +21,13 @@ AI agents are isolated. When two agents need to collaborate, there's no simple w
 
 **Agent A** (on any machine):
 ```bash
-walkie create ops-room -s mysecret
+walkie connect ops-room:mysecret
 walkie send ops-room "task complete, results ready"
 ```
 
 **Agent B** (on any other machine, or a different terminal on the same machine):
 ```bash
-walkie join ops-room -s mysecret
+walkie connect ops-room:mysecret
 walkie read ops-room
 # [14:30:05] a1b2c3d4: task complete, results ready
 ```
@@ -37,13 +37,14 @@ Works the same whether agents are on the same machine or different continents.
 ## Commands
 
 ```
-walkie create <channel> -s <secret>   Create a channel
-walkie join <channel> -s <secret>     Join a channel
-walkie send <channel> "message"       Send a message
+walkie connect <channel>:<secret>     Connect to a channel
+walkie send <channel> "message"       Send a message (or pipe from stdin)
 walkie read <channel>                 Read pending messages
 walkie read <channel> --wait          Block until a message arrives
+walkie watch <channel>:<secret>       Stream messages (JSONL, --pretty, --exec)
 walkie status                         Show active channels & peers
 walkie leave <channel>                Leave a channel
+walkie web                            Start web-based chat UI
 walkie stop                           Stop the daemon
 ```
 
@@ -65,12 +66,28 @@ Agent A                Agent B
 4. All communication is encrypted via the Noise protocol
 5. A background daemon maintains connections so CLI commands are instant
 
+## Web UI
+
+![walkie web UI](assets/walkie-web.png)
+
+Want to watch your agents talk, or jump into the conversation from a browser?
+
+```bash
+walkie web
+# walkie web UI → http://localhost:3000
+```
+
+Open the URL, join a channel with the same secret your agents use, and you'll see messages in real-time. Click your name in the top-right to set a human-readable identity. Session persists across page refreshes.
+
+Use `-p` to change the port: `walkie web -p 8080`
+
 ## Use cases
 
 - **Multi-agent collaboration** — agents coordinate tasks in real-time
 - **Agent delegation** — one agent sends work to another and waits for results
 - **Agent monitoring** — watch what your agents are doing from another terminal
 - **Cross-machine pipelines** — chain agents across different servers
+- **Human-in-the-loop** — observe and participate in agent conversations via the web UI
 
 ## Skill
 
@@ -83,6 +100,20 @@ npx skills add https://github.com/vikasprogrammer/walkie --skill walkie
 Install the skill and any agent with shell access can create channels, send messages, and coordinate with other agents automatically.
 
 ## Changelog
+
+### 1.4.0
+
+- **`walkie connect`** — one command replacing `create`/`join`. Format: `walkie connect channel:secret`. No colon = secret defaults to channel name
+- **`walkie watch`** — stream messages in real-time. JSONL by default, `--pretty` for human-readable, `--exec <cmd>` to run a command per message with env vars (`WALKIE_MSG`, `WALKIE_FROM`, `WALKIE_TS`, `WALKIE_CHANNEL`)
+- **Auto-connect** — `send` and `read` accept `channel:secret` format, auto-joining before the operation
+- **Join/leave announcements** — `[system] alice joined` / `[system] alice left` delivered to all subscribers when agents connect or disconnect
+- **Stdin send** — `echo "hello" | walkie send channel` — reads message from stdin when no argument given, avoids shell escaping issues
+- **Shell escaping fix** — `\!` automatically unescaped to `!` in sent messages (works around zsh/bash history expansion)
+- **Web UI** — `walkie web` starts a browser-based chat UI with real-time messages, renameable identity, and session persistence
+- **Deprecation notices** — `create` and `join` still work but print a notice pointing to `connect`
+- **Persistent message storage** — opt-in via `--persist` flag on `connect`/`watch`/`create`/`join`. Messages saved as JSONL in `~/.walkie/messages/`. No flag = no files, zero disk footprint
+- **P2P sync** — persistent channels exchange missed messages on peer reconnect via `sync_req`/`sync_resp`, with message deduplication via unique IDs
+- **TTL-based cleanup** — persistent messages expire after 24h by default (configurable via `WALKIE_TTL` env in seconds), compacted on startup + every 15min
 
 ### 1.3.0
 

@@ -1,6 +1,6 @@
 {
   "name": "walkie-sh",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "P2P communication CLI for AI agents. No server. No setup. Just talk.",
   "homepage": "https://walkie.sh",
   "repository": {
@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "commander": "^12.0.0",
-    "hyperswarm": "^4.0.0"
+    "hyperswarm": "^4.0.0",
+    "ws": "^8.0.0"
   }
 }

@@ -10,6 +10,8 @@ walkie — P2P communication CLI for AI agents. npm package: `walkie-sh`.
 - `src/daemon.js` — background daemon managing Hyperswarm P2P + local subscriber routing
 - `src/client.js` — IPC client, handles daemon auto-start and stale socket cleanup
 - `src/crypto.js` — topic derivation (SHA-256 of channel+secret)
+- `src/web.js` — HTTP + WebSocket server bridging browser clients to daemon
+- `src/web-ui.js` — exports HTML string for web chat UI (minimal, terminal-style)
 
 ## Testing
 
@@ -53,3 +55,7 @@ instapods deploy walkie --local docs --preset static
 - No `--as` flag (removed in v1.3.0). Only `WALKIE_ID` env var for explicit names
 - Auto-derived subscriber IDs from terminal session env vars (v1.2.0)
 - `--wait` blocks indefinitely, `--timeout` is optional
+- `walkie web` uses read-wait loops per channel (no daemon changes needed for real-time)
+- Web client identity: `web-{random8hex}`, renameable via header click
+- Web session state (channels, secrets, name) persisted in sessionStorage
+- `ws` npm package added as 3rd dependency

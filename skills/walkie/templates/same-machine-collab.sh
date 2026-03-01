@@ -22,7 +22,7 @@ case "$ROLE" in
   coordinator)
     TASK="${4:?Task description required for coordinator}"
     export WALKIE_ID=coordinator
-    walkie create "$CHANNEL" -s "$SECRET"
+    walkie connect "$CHANNEL:$SECRET"
     walkie send "$CHANNEL" "$TASK"
     echo "Task sent locally. Waiting for result..."
     walkie read "$CHANNEL" --wait --timeout 120
@@ -30,7 +30,7 @@ case "$ROLE" in
     ;;
   worker)
     export WALKIE_ID=worker
-    walkie join "$CHANNEL" -s "$SECRET"
+    walkie connect "$CHANNEL:$SECRET"
     echo "Joined channel. Waiting for task..."
     TASK=$(walkie read "$CHANNEL" --wait --timeout 60)
     echo "Received task: $TASK"

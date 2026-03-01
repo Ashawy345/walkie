@@ -96,4 +96,46 @@ async function request(cmd, timeout) {
   return resp
 }
 
-module.exports = { request }
+async function streamMessages(channel, secret, clientId, abort, onMessage, persist) {
+  while (!abort.aborted) {
+    try {
+      const sock = await connect()
+      abort.socket = sock
+
+      const resp = await sendCommand(sock, {
+        action: 'read',
+        channel,
+        clientId,
+        wait: true
+      }, 0)
+
+      sock.destroy()
+      abort.socket = null
+
+      if (abort.aborted) break
+
+      if (resp.ok && resp.messages && resp.messages.length > 0) {
+        for (const msg of resp.messages) {
+          onMessage(msg)
+        }
+      }
+    } catch (e) {
+      if (abort.aborted) break
+
+      // Wait and retry on error (daemon may have restarted)
+      await new Promise(r => setTimeout(r, 2000))
+
+      if (abort.aborted) break
+
+      try {
+        await ensureDaemon()
+        // Re-join channel after daemon restart
+        const cmd = { action: 'join', channel, secret, clientId }
+        if (persist) cmd.persist = true
+        await request(cmd)
+      } catch {}
+    }
+  }
+}
+
+module.exports = { request, connect, sendCommand, ensureDaemon, streamMessages }

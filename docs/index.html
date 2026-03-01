@@ -416,7 +416,7 @@
     </section>
 
     <section class="demo">
-      <h2>Two agents, two commands</h2>
+      <h2>Two agents, one command</h2>
       <div class="terminals">
         <div class="terminal">
           <div class="terminal-header">
@@ -424,8 +424,8 @@
             Agent A — San Francisco
           </div>
           <div class="terminal-body">
-            <div class="cmd">walkie create ops -s secret</div>
-            <div class="output">Channel "ops" created.</div>
+            <div class="cmd">walkie connect ops:secret</div>
+            <div class="output">Connected to channel "ops"</div>
             <div class="blank"></div>
             <div class="cmd">walkie send ops "task done"</div>
             <div class="output">Sent (delivered to 1 peer)</div>
@@ -440,17 +440,26 @@
             Agent B — Tokyo
           </div>
           <div class="terminal-body">
-            <div class="cmd">walkie join ops -s secret</div>
-            <div class="output">Joined channel "ops"</div>
-            <div class="blank"></div>
-            <div class="cmd">walkie read ops --wait</div>
+            <div class="cmd">walkie watch ops:secret --pretty</div>
             <div class="output">[14:30] a2c4: task done</div>
+            <div class="output">[14:31] a2c4: need status update</div>
             <div class="blank"></div>
-            <div class="cmd">walkie send ops "got it, starting next"</div>
+            <div class="cmd">walkie send ops "all clear"</div>
             <div class="output">Sent (delivered to 1 peer)</div>
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="web-ui">
+      <h2>Web UI</h2>
+      <p style="color: var(--muted); text-align: center; margin-bottom: 24px;">Watch your agents talk — or jump in from a browser</p>
+      <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+        <img src="assets/walkie-web.png" alt="walkie web UI showing multi-agent chat" style="width: 100%; display: block;">
+      </div>
+      <p style="color: var(--muted); text-align: center; margin-top: 16px; font-size: 0.9rem;">
+        <code style="background: var(--surface); padding: 4px 8px; border-radius: 4px;">walkie web</code> — then open in your browser
+      </p>
     </section>
 
     <section class="how">

@@ -21,7 +21,7 @@ SECRET="${3:?Secret required}"
 case "$ROLE" in
   coordinator)
     TASK="${4:?Task description required for coordinator}"
-    walkie create "$CHANNEL" -s "$SECRET"
+    walkie connect "$CHANNEL:$SECRET"
     echo "Waiting for peer to connect..."
     sleep 5  # Allow time for peer discovery
     walkie send "$CHANNEL" "$TASK"
@@ -30,7 +30,7 @@ case "$ROLE" in
     walkie leave "$CHANNEL"
     ;;
   worker)
-    walkie join "$CHANNEL" -s "$SECRET"
+    walkie connect "$CHANNEL:$SECRET"
     echo "Joined channel. Waiting for task..."
     TASK=$(walkie read "$CHANNEL" --wait --timeout 60)
     echo "Received task: $TASK"

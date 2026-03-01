@@ -3,6 +3,7 @@ const net = require('net')
 const fs = require('fs')
 const path = require('path')
 const { deriveTopic, agentId } = require('./crypto')
+const store = require('./store')
 
 const WALKIE_DIR = process.env.WALKIE_DIR || path.join(process.env.HOME, '.walkie')
 const SOCKET_PATH = path.join(WALKIE_DIR, 'daemon.sock')
@@ -14,12 +15,17 @@ function log(...args) {
   try { fs.appendFileSync(LOG_FILE, line) } catch {}
 }
 
+const TTL_MS = (parseInt(process.env.WALKIE_TTL, 10) || 86400) * 1000
+const COMPACT_INTERVAL = 15 * 60 * 1000
+
 class WalkieDaemon {
   constructor() {
     this.id = agentId()
     this.swarm = new Hyperswarm()
-    this.channels = new Map()  // name -> { topicHex, discovery, peers: Set, subscribers: Map<clientId, { messages: [], waiters: [] }> }
+    this.channels = new Map()  // name -> { topicHex, discovery, persist, knownMsgIds, peers: Set, subscribers: Map<clientId, { messages: [], waiters: [], lastReadTs }> }
     this.peers = new Map()     // remoteKey hex -> { conn, channels: Set }
+    this.msgSeq = 0
+    this._compactTimer = null
   }
 
   async start() {
@@ -35,6 +41,10 @@ class WalkieDaemon {
 
     // P2P connections
     this.swarm.on('connection', (conn, info) => this._onPeer(conn, info))
+
+    // TTL compaction on startup + periodic
+    store.compactAll(TTL_MS)
+    this._compactTimer = setInterval(() => store.compactAll(TTL_MS), COMPACT_INTERVAL)
 
     process.on('SIGTERM', () => this.shutdown())
     process.on('SIGINT', () => this.shutdown())
@@ -71,10 +81,16 @@ class WalkieDaemon {
       switch (cmd.action) {
         case 'join': {
           const id = cmd.clientId || 'default'
-          await this._joinChannel(cmd.channel, cmd.secret)
+          await this._joinChannel(cmd.channel, cmd.secret, cmd.persist)
           const ch = this.channels.get(cmd.channel)
-          if (!ch.subscribers.has(id)) {
-            ch.subscribers.set(id, { messages: [], waiters: [] })
+          const isNew = !ch.subscribers.has(id)
+          if (isNew) {
+            ch.subscribers.set(id, { messages: [], waiters: [], lastReadTs: 0 })
+            // Announce join to existing subscribers
+            if (ch.subscribers.size > 1) {
+              const announcement = { from: 'system', data: `${id} joined`, ts: Date.now() }
+              this._deliverLocal(ch, announcement, id)
+            }
           }
           reply({ ok: true, channel: cmd.channel })
           break
@@ -92,13 +108,30 @@ class WalkieDaemon {
 
           // Auto-register subscriber on read if not yet joined
           if (!ch.subscribers.has(id)) {
-            ch.subscribers.set(id, { messages: [], waiters: [] })
+            ch.subscribers.set(id, { messages: [], waiters: [], lastReadTs: 0 })
           }
           const sub = ch.subscribers.get(id)
 
+          // Merge persisted messages for persistent channels
+          if (ch.persist) {
+            const stored = store.read(cmd.channel, sub.lastReadTs)
+            if (stored.length > 0) {
+              // Merge with in-memory, dedup by id
+              const inMemIds = new Set(sub.messages.map(m => m.id).filter(Boolean))
+              for (const msg of stored) {
+                if (!msg.id || !inMemIds.has(msg.id)) sub.messages.push(msg)
+              }
+              sub.messages.sort((a, b) => a.ts - b.ts)
+            }
+          }
+
           // If messages available or no wait requested, return immediately
           if (sub.messages.length > 0 || !cmd.wait) {
-            reply({ ok: true, messages: sub.messages.splice(0) })
+            const msgs = sub.messages.splice(0)
+            if (msgs.length > 0) {
+              sub.lastReadTs = msgs[msgs.length - 1].ts
+            }
+            reply({ ok: true, messages: msgs })
             return
           }
 
@@ -114,6 +147,7 @@ class WalkieDaemon {
           const waiter = (msgs) => {
             if (timer) clearTimeout(timer)
             if (socket.writable) {
+              if (msgs.length > 0) sub.lastReadTs = msgs[msgs.length - 1].ts
               reply({ ok: true, messages: msgs })
             } else {
               // Socket gone (client interrupted) — put messages back
@@ -134,6 +168,11 @@ class WalkieDaemon {
           const ch = this.channels.get(cmd.channel)
           if (ch) {
             ch.subscribers.delete(id)
+            // Announce leave to remaining subscribers
+            if (ch.subscribers.size > 0) {
+              const announcement = { from: 'system', data: `${id} left`, ts: Date.now() }
+              this._deliverLocal(ch, announcement, null)
+            }
             // Only fully leave the channel if no subscribers remain
             if (ch.subscribers.size === 0) {
               await this._leaveChannel(cmd.channel)
@@ -147,7 +186,12 @@ class WalkieDaemon {
           for (const [name, ch] of this.channels) {
             let buffered = 0
             for (const [, sub] of ch.subscribers) buffered += sub.messages.length
-            channels[name] = { peers: ch.peers.size, subscribers: ch.subscribers.size, buffered }
+            const info = { peers: ch.peers.size, subscribers: ch.subscribers.size, buffered }
+            if (ch.persist) {
+              info.persist = true
+              info.stored = store.read(name, 0).length
+            }
+            channels[name] = info
           }
           reply({ ok: true, channels, daemonId: this.id })
           break
@@ -171,19 +215,33 @@ class WalkieDaemon {
 
   // ── Channel management ────────────────────────────────────────────
 
-  async _joinChannel(name, secret) {
-    if (this.channels.has(name)) return
+  async _joinChannel(name, secret, persist) {
+    if (this.channels.has(name)) {
+      // Upgrade to persistent if requested (never downgrade)
+      if (persist) {
+        const ch = this.channels.get(name)
+        if (!ch.persist) {
+          ch.persist = true
+          ch.knownMsgIds = store.loadIds(name)
+          log(`Channel "${name}" upgraded to persistent`)
+        }
+      }
+      return
+    }
 
     const topic = deriveTopic(name, secret)
     const topicHex = topic.toString('hex')
-    log(`Joining channel "${name}" topic=${topicHex.slice(0, 16)}...`)
+    log(`Joining channel "${name}" topic=${topicHex.slice(0, 16)}...${persist ? ' [persist]' : ''}`)
     const discovery = this.swarm.join(topic, { server: true, client: true })
     await discovery.flushed()
     log(`Channel "${name}" flushed, discoverable`)
 
     this.channels.set(name, {
       topicHex,
+      secret,
       discovery,
+      persist: !!persist,
+      knownMsgIds: persist ? store.loadIds(name) : null,
       peers: new Set(),
       subscribers: new Map()
     })
@@ -209,6 +267,9 @@ class WalkieDaemon {
             ch.peers.add(remoteKey)
             peer.channels.add(name)
             log(`Late-matched channel "${name}" with peer ${remoteKey.slice(0, 12)}`)
+            if (ch.persist) {
+              this._sendSyncReq(peer.conn, name, ch)
+            }
           }
         }
       }
@@ -269,6 +330,10 @@ class WalkieDaemon {
           ch.peers.add(remoteKey)
           peer.channels.add(name)
           log(`Matched channel "${name}" with peer ${remoteKey.slice(0, 12)}`)
+          // Send sync request for persistent channels
+          if (ch.persist) {
+            this._sendSyncReq(peer.conn, name, ch)
+          }
         }
       }
       return
@@ -277,11 +342,68 @@ class WalkieDaemon {
     if (msg.t === 'msg') {
       for (const [name, ch] of this.channels) {
         if (ch.topicHex === msg.topic) {
-          const entry = { from: msg.id || remoteKey.slice(0, 8), data: msg.data, ts: msg.ts }
+          const msgId = msg.msgId || `${msg.id}-${msg.ts}`
+          const entry = { from: msg.id || remoteKey.slice(0, 8), data: msg.data, ts: msg.ts, id: msgId }
+          // Dedup for persistent channels
+          if (ch.persist) {
+            if (ch.knownMsgIds.has(msgId)) break
+            ch.knownMsgIds.add(msgId)
+            store.append(name, entry)
+          }
           this._deliverLocal(ch, entry, null)
           break
         }
       }
+      return
+    }
+
+    if (msg.t === 'sync_req') {
+      for (const [name, ch] of this.channels) {
+        if (ch.topicHex === msg.topic && ch.persist) {
+          const cutoff = Date.now() - TTL_MS
+          const since = Math.max(msg.since || 0, cutoff)
+          const messages = store.read(name, since)
+          if (peer.conn?.writable) {
+            peer.conn.write(JSON.stringify({
+              t: 'sync_resp',
+              topic: ch.topicHex,
+              messages
+            }) + '\n')
+            log(`Sent sync_resp to ${remoteKey.slice(0, 12)}: ${messages.length} msg(s)`)
+          }
+          break
+        }
+      }
+      return
+    }
+
+    if (msg.t === 'sync_resp') {
+      for (const [name, ch] of this.channels) {
+        if (ch.topicHex === msg.topic && ch.persist) {
+          let added = 0
+          for (const entry of (msg.messages || [])) {
+            const msgId = entry.id || `${entry.from}-${entry.ts}`
+            if (ch.knownMsgIds.has(msgId)) continue
+            ch.knownMsgIds.add(msgId)
+            entry.id = msgId
+            store.append(name, entry)
+            this._deliverLocal(ch, entry, null)
+            added++
+          }
+          log(`Sync from ${remoteKey.slice(0, 12)}: ${added} new msg(s) for "${name}"`)
+          break
+        }
+      }
+      return
+    }
+  }
+
+  _sendSyncReq(conn, channelName, ch) {
+    let since = 0
+    const msgs = store.read(channelName, 0)
+    if (msgs.length > 0) since = msgs[msgs.length - 1].ts
+    if (conn?.writable) {
+      conn.write(JSON.stringify({ t: 'sync_req', topic: ch.topicHex, since }) + '\n')
     }
   }
 
@@ -292,11 +414,13 @@ class WalkieDaemon {
     if (!ch) throw new Error(`Not in channel: ${channelName}`)
 
     const ts = Date.now()
+    const msgId = `${this.id}-${++this.msgSeq}`
     const payload = JSON.stringify({
       t: 'msg',
       topic: ch.topicHex,
       data: message,
       id: this.id,
+      msgId,
       ts
     }) + '\n'
 
@@ -310,7 +434,14 @@ class WalkieDaemon {
     }
 
     // Deliver to local subscribers (excluding sender)
-    const entry = { from: senderClientId || this.id, data: message, ts }
+    const entry = { from: senderClientId || this.id, data: message, ts, id: msgId }
+
+    // Persist if channel has persistence enabled
+    if (ch.persist) {
+      ch.knownMsgIds.add(msgId)
+      store.append(channelName, entry)
+    }
+
     const localCount = this._deliverLocal(ch, entry, senderClientId)
     count += localCount
 
@@ -334,6 +465,7 @@ class WalkieDaemon {
   // ── Shutdown ──────────────────────────────────────────────────────
 
   async shutdown() {
+    if (this._compactTimer) clearInterval(this._compactTimer)
     try { fs.unlinkSync(SOCKET_PATH) } catch {}
     try { fs.unlinkSync(PID_FILE) } catch {}
     await this.swarm.destroy()

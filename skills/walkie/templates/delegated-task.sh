@@ -14,8 +14,8 @@ TASK="${3:?Task description required}"
 TIMEOUT="${4:-60}"
 
 # Create channel and wait for peer
-walkie create "$CHANNEL" -s "$SECRET"
-echo "Channel created. Waiting for worker to join..."
+walkie connect "$CHANNEL:$SECRET"
+echo "Connected. Waiting for worker to join..."
 
 # Poll for peer connection
 for i in $(seq 1 30); do
